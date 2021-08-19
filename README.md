@@ -6,3 +6,6 @@
 Masked的改进策略参见论文：
 
 Masked Conditional Random Fields for Sequence Labeling[https://arxiv.org/abs/2103.10682]
+
+tensorflow版本的实现，请参见作者提供的代码：
+https://github.com/DandyQi/MaskedCRF
