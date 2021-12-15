@@ -341,7 +341,7 @@ class CRF(nn.Module):
 
         return best_tags_list
 
-    # 遮蔽矩阵
+    # Masked matrix
     def get_mask_trans(self):
         size = len(self.label2idx_map)
         tag_lst = self.label2idx_map.keys()
