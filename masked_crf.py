@@ -2,11 +2,9 @@ __version__ = '0.7.2'
 
 from typing import List, Optional
 import numpy as np
-import logging
 import torch
 torch.set_printoptions(profile="full")
 import torch.nn as nn
-
 
 class CRF(nn.Module):
     """Conditional random field.
@@ -47,9 +45,9 @@ class CRF(nn.Module):
         self.start_transitions = nn.Parameter(torch.empty(num_tags))
         self.end_transitions = nn.Parameter(torch.empty(num_tags))
         self.transitions = nn.Parameter(torch.empty(num_tags, num_tags))
-
-        self.mask_tran_matrix = nn.Parameter(torch.tensor(self.get_mask_trans()))
         self.reset_parameters()
+
+        self.mask_tran_matrix = torch.tensor(self.get_mask_trans()).cuda()
 
     def reset_parameters(self) -> None:
         """Initialize the transition parameters.
@@ -102,12 +100,6 @@ class CRF(nn.Module):
             tags = tags.transpose(0, 1)
             mask = mask.transpose(0, 1)
 
-        for i in range(self.mask_tran_matrix.shape[0]):
-            for j in range(self.mask_tran_matrix.shape[1]):
-                if self.mask_tran_matrix[i][j] == -10.0:
-                    self.transitions.data[i][j] = torch.tensor([-1.0])
-        # print(self.transitions)
-
         # shape: (batch_size,)
         numerator = self._compute_score(emissions, tags, mask)
         # shape: (batch_size,)
@@ -145,12 +137,6 @@ class CRF(nn.Module):
         if self.batch_first:
             emissions = emissions.transpose(0, 1)
             mask = mask.transpose(0, 1)
-
-        for i in range(self.mask_tran_matrix.shape[0]):
-            for j in range(self.mask_tran_matrix.shape[1]):
-                if self.mask_tran_matrix[i][j] == -10.0:
-                    self.transitions.data[i][j] = torch.tensor([-1.0])
-        # print(self.transitions)
 
         return self._viterbi_decode(emissions, mask)
 
@@ -202,6 +188,8 @@ class CRF(nn.Module):
         score = self.start_transitions[tags[0]]
         score += emissions[0, torch.arange(batch_size), tags[0]]
 
+        self.transitions.data = self.transitions.min(self.mask_tran_matrix)
+
         for i in range(1, seq_length):
             # Transition score to next tag, only added if next timestep is valid (mask == 1)
             # shape: (batch_size,)
@@ -237,6 +225,8 @@ class CRF(nn.Module):
         # the score that the first timestep has tag j
         # shape: (batch_size, num_tags)
         score = self.start_transitions + emissions[0]
+
+        self.transitions.data = self.transitions.min(self.mask_tran_matrix)
 
         for i in range(1, seq_length):
             # Broadcast score for every possible next tag
@@ -287,6 +277,8 @@ class CRF(nn.Module):
         # shape: (batch_size, num_tags)
         score = self.start_transitions + emissions[0]
         history = []
+
+        self.transitions.data = self.transitions.min(self.mask_tran_matrix)
 
         # score is a tensor of size (batch_size, num_tags) where for every batch,
         # value at column j stores the score of the best tag sequence so far that ends
@@ -355,7 +347,6 @@ class CRF(nn.Module):
         tag_lst = self.label2idx_map.keys()
 
         mask_mat = np.ones(shape=(size, size), dtype=np.float32)
-
         # analysis tag schema，BIO or BIOES
         is_scheme_bioes = False
         flag_e = False
@@ -399,4 +390,5 @@ class CRF(nn.Module):
                         if row_tag.startswith("B-") or row_tag.startswith("I-"):
                             mask_mat[row_index, col_index] = -1.0
 
-        return 10 * mask_mat
+        return 100 * mask_mat
+
